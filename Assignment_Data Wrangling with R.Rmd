@@ -1,0 +1,777 @@
+---
+title: "Data Wrangling and Analysis in R"
+output:
+  html_document:
+    df_print: paged
+---
+
+
+## 1. Installing packages 
+In R, packages are a collection of functions that provide functinalities not given by the R core functionalities. We'll install tidyverse packages which will provide us with packages for performing data manipulation and analysis.
+
+#### Let's install tidyverse packages in Rstudio
+```{r}
+install.packages("tidyverse")
+install.packages("readr")
+```
+
+#### Load tidyverse for use in our notebook
+```{r}
+library(tidyverse)
+library(readr)
+```
+
+## 2. Load dataset
+MTN Telecom offers mobile and internet services to its customers. These services include phone, multiple lines, internet, online security, online backup, device protection, tech support, and streaming TV and movies.
+
+You have been provided with the current customer data. Since you will be working towards a descriptive report than a predictive one, you decide to think critically of the kind of questions that would help you craft customer retention programs. You then later use the given data set to answer your questions but before you start, you reading, explore, clean and visualise your dataset.
+
+
+```{r}
+# Import, Load dataset and preview its summarized information.
+
+MTN_df <- read.csv("https://bit.ly/2ZlpzjF")
+head(MTN_df)
+
+
+```
+
+```{r}
+#check the no of rows and cols
+dim(MTN_df)
+```
+
+## 3. Data cleaning
+
+### Data understanding
+```{r}
+# Step1: get column names and perform standardisation
+names(MTN_df)
+
+```
+
+```{r}
+#Step 2: convert all column names to lower case
+names(MTN_df) <- tolower(names(MTN_df))
+names(MTN_df)
+
+```
+
+```{r}
+#Step3: Remove all leading and trailing spaces
+names(MTN_df) <- trimws(names(MTN_df), which = c("both"))
+names(MTN_df)
+```
+
+### Removing Irrelevant data
+```{r}
+#check for duplicates
+MTN_df[duplicated(MTN_df), ]
+```
+
+```{r}
+#remove duplicates from the dataframe
+MTN_df <- unique(MTN_df)
+
+#confirm all duplicates are removed
+MTN_df[duplicated(MTN_df), ]
+```
+### handle missing data
+```{r}
+#check if there is missing data from the df
+colSums(is.na(MTN_df))
+```
+
+```{r}
+#Remove all records with missing data
+clean_df <- na.omit(MTN_df)
+
+#confirm no missing values
+colSums(is.na(clean_df))
+
+unique(clean_df$seniorcitizen)
+
+
+```
+
+```{r}
+# column senior_citizen should be a boolean
+clean_df$seniorcitizen[clean_df$seniorcitizen == 0] <- 'No'
+clean_df$seniorcitizen[clean_df$seniorcitizen == 1] <- 'Yes'
+
+#Check unique values
+unique(clean_df$seniorcitizen)
+```
+
+```{r}
+#resolving the issues in the 'paymentmethod' variable
+
+# - Replace 'Mailed checkkk' with 'Mailed check',
+clean_df$paymentmethod[clean_df$paymentmethod == "Mailed checkkk"] <- "Mailed check"
+
+# - Replace 'Electronic checkk', 'Electronic check'
+clean_df$paymentmethod[clean_df$paymentmethod == "Electronic checkk"] <- "Electronic check"
+
+#confirm all replacements have been done
+unique(clean_df$paymentmethod)
+```
+
+```{r}
+# visual distribution of the outliers using a box plot
+
+#prepare data
+tenure <- clean_df$tenure
+monthly_charge <- clean_df$monthlycharges
+Total_charge <- clean_df$totalcharges
+
+
+#plot the chart
+boxplot(tenure,
+        names = "tenure",
+        xlab = "Customers",
+        ylab = "Tenure", 
+        main = "boxplot with customer tenure")
+
+boxplot(monthly_charge,
+        names = "monthly",
+        xlab = "Customers",
+        ylab = "Billed Amount", 
+        main = "boxplot with monthly charging data")
+
+boxplot(Total_charge,
+        names = "Total",
+        xlab = "Customers",
+        ylab = "Billed Amount", 
+        main = "boxplot with Total charging data")
+
+```
+
+### Dealing with outliers
+
+```{r}
+#Removing the outliers using IQR method
+dim(clean_df)
+#calculate lower and upper percentiles
+lower_bound <- quantile(clean_df$tenure, 0.025)
+upper_bound <- quantile(clean_df$tenure, 0.975)
+lower_bound
+upper_bound
+
+#getting values that are not outliers
+tenure_not_outlier_values <- which(clean_df$tenure > lower_bound & clean_df$tenure < upper_bound)
+
+IQR_df<- clean_df[tenure_not_outlier_values,]
+
+dim(IQR_df)
+
+```
+
+```{r}
+lower_bound <- quantile(IQR_df$monthlycharges, 0.025)
+upper_bound <- quantile(IQR_df$monthlycharges, 0.975)
+lower_bound
+upper_bound
+
+#getting values that are not outliers
+not_outlier_values <- which(IQR_df$monthlycharges > lower_bound & IQR_df$monthlycharges < upper_bound)
+
+IQR2_df<- IQR_df[not_outlier_values, ]
+
+#check values after removing outliers
+dim(IQR2_df)
+```
+
+```{r}
+lower_bound <- quantile(IQR2_df$totalcharges, 0.025)
+upper_bound <- quantile(IQR2_df$totalcharges, 0.975)
+lower_bound
+upper_bound
+
+#getting values that are not outliers
+not_outlier_values <- which(IQR2_df$totalcharges > lower_bound & IQR2_df$monthlycharges < upper_bound)
+
+Telecom_clean_df<- IQR2_df[not_outlier_values, ]
+
+#check the new df
+dim(Telecom_clean_df)
+```
+
+
+## 4. Data analysis
+Since our research question requires us to focus on how we can retain customers, the main variable to work with is the "churn" variable.
+
+### Research specific analysis
+What percentage of customers from our dataset churned?
+
+```{r}
+# plotting a pie chart to investigate whether MTN customers churned
+
+# prepare data
+df <- Telecom_clean_df %>% 
+  group_by(churn) %>% # Variable to be transformed
+  count() %>% 
+  ungroup() %>% 
+  mutate(perc = `n` / sum(`n`)) %>% 
+  arrange(perc) %>%
+  mutate(labels = scales::percent(perc))
+
+# df_1 <- Telecom_clean_df %>%
+#   count(churn)
+# df_1
+
+#Plot
+ggplot(df, aes(x = "", y = perc, fill = churn)) +
+  geom_col() +
+  geom_text(aes(label = labels),
+            position = position_stack(vjust = 0.5)) +
+  labs(
+    fill = "Churn", 
+    title = "Churn Distribution"
+  ) +
+  coord_polar(theta = "y")+ 
+  theme_void()
+```
+
+
+
+```{r}
+# we investigate the distribution of churn by senior citizen
+# and recording our observations.
+df_snr <- Telecom_clean_df %>% 
+  filter(seniorcitizen =='Yes') %>%
+  group_by(churn) %>% # Variable to be transformed
+  count() %>% 
+  ungroup() %>% 
+  mutate(perc = `n` / sum(`n`)) %>% 
+  arrange(perc) %>%
+  mutate(labels = scales::percent(perc))
+df_snr
+
+#plot the pie chart
+ggplot(df_snr, aes(x = "", y = perc, fill = churn)) +
+  geom_col() +
+  geom_text(aes(label = labels),
+            position = position_stack(vjust = 0.5)) +
+  labs(
+    fill = "Churn", 
+    title = "Churn Distribution among senior citizens"
+  ) +
+  coord_polar(theta = "y")+ 
+  theme_void()
+
+```
+
+```{r}
+# plotting the distribution of churn by partner
+# and recording our observations.
+
+df_ptr <- Telecom_clean_df %>% 
+  filter(churn =='Yes') %>%
+  group_by(partner) %>% # Variable to be transformed
+  count() %>% 
+  ungroup() %>% 
+  mutate(perc = `n` / sum(`n`)) %>% 
+  arrange(perc) %>%
+  mutate(labels = scales::percent(perc))
+df_ptr
+
+#plot
+ggplot(df_ptr, aes(x = "", y = perc, fill = partner)) +
+  geom_col() +
+  geom_text(aes(label = labels),
+            position = position_stack(vjust = 0.5)) +
+  labs(
+    fill = "Partner", 
+    title = "Churn Distribution by partner"
+  ) +
+  coord_polar(theta = "y")+ 
+  theme_void()
+
+```
+
+```{r}
+# plotting the distribution of churn by dependents 
+# and then record your observations
+df_dpt <- Telecom_clean_df %>% 
+  filter(churn =='Yes') %>%
+  group_by(dependents) %>% # Variable to be transformed
+  count() %>% 
+  ungroup() %>% 
+  mutate(perc = `n` / sum(`n`)) %>% 
+  arrange(perc) %>%
+  mutate(labels = scales::percent(perc))
+df_dpt
+
+#plot
+ggplot(df_dpt, aes(x = "", y = perc, fill = dependents)) +
+  geom_col() +
+  geom_text(aes(label = labels),
+            position = position_stack(vjust = 0.5)) +
+  labs(
+    fill = "Dependents", 
+    title = "Churn Distribution by Dependents"
+  ) +
+  coord_polar(theta = "y")+ 
+  theme_void()
+
+```
+
+```{r}
+# plotting the distribution of churn by phone service 
+# then recording your observations.
+
+df_phn <- Telecom_clean_df %>% 
+  filter(churn =='Yes') %>%
+  group_by(phoneservice) %>% # Variable to be transformed
+  count() %>% 
+  ungroup() %>% 
+  mutate(perc = `n` / sum(`n`)) %>% 
+  arrange(perc) %>%
+  mutate(labels = scales::percent(perc))
+df_phn
+
+#plot
+ggplot(df_phn, aes(x = "", y = perc, fill = phoneservice)) +
+  geom_col() +
+  geom_text(aes(label = labels),
+            position = position_stack(vjust = 0.5)) +
+  labs(
+    fill = "Phone Service", 
+    title = "Churn Distribution by Phone Service "
+  ) +
+  coord_polar(theta = "y")+ 
+  theme_void()
+```
+
+```{r}
+# plotting the distribution of churn by internet service 
+# and later record our observations.
+
+df_int <- Telecom_clean_df %>% 
+  filter(churn =='Yes') %>%
+  group_by(internetservice) %>% # Variable to be transformed
+  count() %>% 
+  ungroup() %>% 
+  mutate(perc = `n` / sum(`n`)) %>% 
+  arrange(perc) %>%
+  mutate(labels = scales::percent(perc))
+df_int
+
+#plot
+ggplot(df_int, aes(x = "", y = perc, fill = internetservice)) +
+  geom_col() +
+  geom_text(aes(label = labels),
+            position = position_stack(vjust = 0.5)) +
+  labs(
+    fill = "Churn", 
+    title = "Churn Distribution by Internet Service"
+  ) +
+  coord_polar(theta = "y")+ 
+  theme_void()
+```
+
+```{r}
+# plotting the distribution of churn by online security and then record
+# our observations below:
+df_sec <- Telecom_clean_df %>% 
+  filter(churn =='Yes') %>%
+  group_by(onlinesecurity) %>% # Variable to be transformed
+  count() %>% 
+  ungroup() %>% 
+  mutate(perc = `n` / sum(`n`)) %>% 
+  arrange(perc) %>%
+  mutate(labels = scales::percent(perc))
+df_sec
+
+#plot
+ggplot(df_sec, aes(x = "", y = perc, fill = onlinesecurity)) +
+  geom_col() +
+  geom_text(aes(label = labels),
+            position = position_stack(vjust = 0.5)) +
+  labs(
+    fill = "Online Security", 
+    title = "Churn Distribution by Online Security"
+  ) +
+  coord_polar(theta = "y")+ 
+  theme_void()
+
+```
+
+
+```{r}
+# plotting the distribution of churn by online backup
+df_bckup <- Telecom_clean_df %>% 
+  filter(churn =='Yes') %>%
+  group_by(onlinebackup) %>% # Variable to be transformed
+  count() %>% 
+  ungroup() %>% 
+  mutate(perc = `n` / sum(`n`)) %>% 
+  arrange(perc) %>%
+  mutate(labels = scales::percent(perc))
+df_bckup
+
+#plot
+ggplot(df_bckup, aes(x = "", y = perc, fill = onlinebackup)) +
+  geom_col() +
+  geom_text(aes(label = labels),
+            position = position_stack(vjust = 0.5)) +
+  labs(
+    fill = "Online Backup", 
+    title = "Churn Distribution by Onlinebackup"
+  ) +
+  coord_polar(theta = "y")+ 
+  theme_void()
+```
+
+```{r}
+# plotting the distribution of churn by tech support
+df_techspt <- Telecom_clean_df %>% 
+  filter(churn =='Yes') %>%
+  group_by(techsupport) %>% # Variable to be transformed
+  count() %>% 
+  ungroup() %>% 
+  mutate(perc = `n` / sum(`n`)) %>% 
+  arrange(perc) %>%
+  mutate(labels = scales::percent(perc))
+df_techspt
+
+#plot
+ggplot(df_techspt, aes(x = "", y = perc, fill = techsupport)) +
+  geom_col() +
+  geom_text(aes(label = labels),
+            position = position_stack(vjust = 0.5)) +
+  labs(
+    fill = "Tech Support", 
+    title = "Churn Distribution by Tech Support"
+  ) +
+  coord_polar(theta = "y")+ 
+  theme_void()
+```
+
+```{r}
+# plotting the distribution of churn by streaming tv
+
+df_tv <- Telecom_clean_df %>% 
+  filter(churn =='Yes') %>%
+  group_by(streamingtv) %>% # Variable to be transformed
+  count() %>% 
+  ungroup() %>% 
+  mutate(perc = `n` / sum(`n`)) %>% 
+  arrange(perc) %>%
+  mutate(labels = scales::percent(perc))
+df_tv
+
+#plot
+ggplot(df_tv, aes(x = "", y = perc, fill = streamingtv)) +
+  geom_col() +
+  geom_text(aes(label = labels),
+            position = position_stack(vjust = 0.5)) +
+  labs(
+    fill = "Streaming TV", 
+    title = "Churn Distribution by Streaming TV"
+  ) +
+  coord_polar(theta = "y")+ 
+  theme_void()
+
+```
+
+```{r}
+# plotting the distribution of churn by streaming movies
+df_movies <- Telecom_clean_df %>% 
+  filter(churn =='Yes') %>%
+  group_by(streamingmovies) %>% # Variable to be transformed
+  count() %>% 
+  ungroup() %>% 
+  mutate(perc = `n` / sum(`n`)) %>% 
+  arrange(perc) %>%
+  mutate(labels = scales::percent(perc))
+df_movies
+
+#plot
+ggplot(df_movies, aes(x = "", y = perc, fill = streamingmovies)) +
+  geom_col() +
+  geom_text(aes(label = labels),
+            position = position_stack(vjust = 0.5)) +
+  labs(
+    fill = "Streaming Movies", 
+    title = "Churn Distribution by Streaming Movies"
+  ) +
+  coord_polar(theta = "y")+ 
+  theme_void()
+```
+
+```{r}
+# plotting the distribution of churn by contract
+df_ctrct <- Telecom_clean_df %>% 
+  filter(churn =='Yes') %>%
+  group_by(contract) %>% # Variable to be transformed
+  count() %>% 
+  ungroup() %>% 
+  mutate(perc = `n` / sum(`n`)) %>% 
+  arrange(perc) %>%
+  mutate(labels = scales::percent(perc))
+df_ctrct
+
+#plot
+ggplot(df_ctrct, aes(x = "", y = perc, fill = contract)) +
+  geom_col() +
+  geom_text(aes(label = labels),
+            position = position_stack(vjust = 0.5)) +
+  labs(
+    fill = "Contract", 
+    title = "Churn Distribution by Contract"
+  ) +
+  coord_polar(theta = "y")+ 
+  theme_void()
+```
+
+
+```{r}
+# plotting the distribution of churn by paperless billing
+df_ppr <- Telecom_clean_df %>% 
+  filter(churn =='Yes') %>%
+  group_by(paperlessbilling) %>% # Variable to be transformed
+  count() %>% 
+  ungroup() %>% 
+  mutate(perc = `n` / sum(`n`)) %>% 
+  arrange(perc) %>%
+  mutate(labels = scales::percent(perc))
+df_ppr
+
+#plot
+ggplot(df_ppr, aes(x = "", y = perc, fill = paperlessbilling)) +
+  geom_col() +
+  geom_text(aes(label = labels),
+            position = position_stack(vjust = 0.5)) +
+  labs(
+    fill = "Paperless Billing", 
+    title = "Churn Distribution by Paperless billing"
+  ) +
+  coord_polar(theta = "y")+ 
+  theme_void()
+```
+
+```{r}
+# plotting the distribution of churn by payment method
+
+df_pay <- Telecom_clean_df %>% 
+  filter(churn =='Yes') %>%
+  group_by(paymentmethod) %>% # Variable to be transformed
+  count() %>% 
+  ungroup() %>% 
+  mutate(perc = `n` / sum(`n`)) %>% 
+  arrange(perc) %>%
+  mutate(labels = scales::percent(perc))
+df_pay
+
+#plot
+ggplot(df_pay, aes(x = "", y = perc, fill = paymentmethod)) +
+  geom_col() +
+  geom_text(aes(label = labels),
+            position = position_stack(vjust = 0.5)) +
+  labs(
+    fill = "Payment Method", 
+    title = "Churn Distribution by Payment Method"
+  ) +
+  coord_polar(theta = "y")+ 
+  theme_void()
+
+```
+
+##  Observations
+
+We observe the following:
+  Electronic check payment method had the highest churn rate at 57.9% while mailed check had the least churn rate at 11.2%
+  78% of paperless billing customers churned
+
+
+
+```{r}
+# creating a data frame for gender
+# previewing our data set's gender distribution
+
+# Create the summary table
+gender_df <- Telecom_clean_df %>% 
+  count(gender)
+gender_df
+
+# Plotting the chart
+ggplot(gender_df, aes(x = gender, y = n)) +
+  geom_col(
+    stat="identity", width=0.5, fill = "#006756"
+  ) +
+  labs(
+    title = "Gender distribution for MTN customer base", 
+    x = "Gender", 
+    y = "Subscribers"
+  ) +
+  theme(
+    plot.title = element_text(hjust = 0.5, size=16, family="Times New Roman"), 
+    axis.text.x = element_text(angle = 45, hjust = 1)
+  )
+```
+
+```{r}
+# plotting distribution of senior citizens
+
+# Create the summary table
+senior_df <- Telecom_clean_df %>% 
+  count(seniorcitizen)
+senior_df
+
+# Plotting the chart
+ggplot(senior_df, aes(x = seniorcitizen, y = n)) +
+  geom_col(
+    stat="identity", width=0.5, fill = "#0099f9"
+  ) +
+  labs(
+    title = "Senior Citizen distribution for MTN customer base", 
+    x = "Senior Citizen", 
+    y = "Subscribers"
+  ) +
+  theme(
+    plot.title = element_text(hjust = 0.5, size=16, family="Times New Roman"), 
+    axis.text.x = element_text(angle = 45, hjust = 1)
+  )
+```
+
+```{r}
+# Plotting a distribution of subscribers with partners and those without
+
+# Create the summary table
+partner_df <- Telecom_clean_df %>% 
+  count(partner)
+partner_df
+
+# Plotting the chart
+ggplot(partner_df, aes(x = partner, y = n)) +
+  geom_col(
+    stat="identity", width=0.5, fill = "#009919"
+  ) +
+  labs(
+    title = "Partner distribution for MTN customer base", 
+    x = "Partner", 
+    y = "Subscribers"
+  ) +
+  theme(
+    plot.title = element_text(hjust = 0.5, size=16, family="Times New Roman"), 
+    axis.text.x = element_text(angle = 45, hjust = 1)
+  )
+```
+
+```{r}
+# plotting a distribution of customers with dependents and those without
+
+# Create the summary table
+dependents_df <- Telecom_clean_df %>% 
+  count(dependents)
+dependents_df
+
+# Plotting the chart
+ggplot(dependents_df, aes(x = dependents, y = n)) +
+  geom_col(
+    stat="identity", width=0.5, fill = "#828909"
+  ) +
+  labs(
+    title = "Dependents distribution for MTN customer base", 
+    x = "dependents", 
+    y = "Subscribers"
+  ) +
+  theme(
+    plot.title = element_text(hjust = 0.5, size=16, family="Times New Roman"), 
+    axis.text.x = element_text(angle = 45, hjust = 1)
+  )
+```
+
+```{r}
+# Plotting a distribution by tenure
+# Create the summary table
+tenure_df <- Telecom_clean_df %>% 
+  count(tenure)
+tenure_df
+
+# Plotting the chart
+ggplot(tenure_df, aes(x = tenure, y = n)) +
+  geom_col(
+    stat="identity", width=0.5, fill = "#627909"
+  ) +
+  labs(
+    title = "tenure distribution for MTN customer base", 
+    x = "tenure", 
+    y = "Subscribers"
+  ) +
+  theme(
+    plot.title = element_text(hjust = 0.5, size=16, family="Times New Roman"), 
+    axis.text.x = element_text(angle = 45, hjust = 1)
+  )
+```
+
+```{r}
+# plotting distribution of phone service
+# Create the summary table
+phone_df <- Telecom_clean_df %>% 
+  count(phoneservice)
+phone_df
+
+# Plotting the chart
+ggplot(phone_df, aes(x = phoneservice, y = n)) +
+  geom_col(
+    stat="identity", width=0.5, fill = "#ff0009"
+  ) +
+  labs(
+    title = "phone service distribution for MTN customer base", 
+    x = "Phone Service", 
+    y = "Subscribers"
+  ) +
+  theme(
+    plot.title = element_text(hjust = 0.5, size=16, family="Times New Roman"), 
+    axis.text.x = element_text(angle = 45, hjust = 1)
+  )
+```
+
+```{r}
+# Plotting a distribution of multiple lines
+# Create the summary table
+mult_df <- Telecom_clean_df %>% 
+  count(multiplelines)
+mult_df
+
+# Plotting the chart
+ggplot(mult_df, aes(x = multiplelines, y = n)) +
+  geom_col(
+    stat="identity", width=0.5, fill = "#ff8909"
+  ) +
+  labs(
+    title = " Multiple Lines distribution for MTN customer base", 
+    x = "Multiple Lines", 
+    y = "Subscribers"
+  ) +
+  theme(
+    plot.title = element_text(hjust = 0.5, size=16, family="Times New Roman"), 
+    axis.text.x = element_text(angle = 45, hjust = 1)
+  )
+```
+
+## Summary of Findings
+
+Based on the results of the analysis, the following conclusions were arrived at:
+
+  There is no significant difference in churn rate between male and female subscribers. So this is not an area management needs to worry about.
+  Majority of the customers are not senior citizens so this makes this dataset biased and hard to identify whether being a senior citizen affects churn rate.
+  Not having a partner increases the likelihood of churning.
+  Not having dependents increases the likelihood of churning.
+  there's no significant difference between customers with multiple lines and those that do not.
+  Customers on a month to month contract have a higher propensity to churn compared to those with long term contract
+  
+  
+  
+## Recommendations
+
+In order to create an effective customer retention program, management should take the following measures:
+
+  Focus more on meeting the needs of non-senior citizens.
+  Focus more on having customers that have partners and/or dependents since these people are less likely to churn. Alternatively, management can come up with services specifically designed for customers without parters and/or dependents. This would require additional research.
+  Focus more on getting customers to long term contract
+
+
+
